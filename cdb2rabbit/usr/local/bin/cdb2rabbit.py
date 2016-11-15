@@ -7,26 +7,29 @@ from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 from configparser import SafeConfigParser
 
+syslog(LOG_INFO, 'Starting')
+
 # Config
 configparser = SafeConfigParser()
 try:
     configparser.read('/etc/packer-utils/config.ini')
     PROFILE_INFO_URL = configparser.get('cdb2rabbit','PROFILE_INFO_URL')
     PROFILE_DIR_URL = configparser.get('cdb2rabbit','PROFILE_DIR_URL')
+    PROFILE_MATCH = configparser.get('cdb2rabbit','PROFILE_MATCH')
     CACHE_DIR = configparser.get('cdb2rabbit','CACHE_DIR')
     QUEUE = configparser.get('cdb2rabbit','QUEUE')
     QUEUE_HOST = configparser.get('cdb2rabbit','QUEUE_HOST')
 except:
     print('Unable to read from config file')
-sys.exit(1)
-
+    sys.exit(1)
 
 def updateCachedFile(file_name, contents):
     try:
         with open(file_name, "wt") as file:
             file.write(contents)
     except IOError as e:
-        syslog(LOG_ERR, "Unable to write profile info to file, check permissions")
+        syslog(LOG_ERR, "Unable to write profile info to file %s" % file_name)
+        syslog(LOG_ERR, repr(e))
 
 def pushMessageToQueue(message):
     try: 
@@ -36,8 +39,9 @@ def pushMessageToQueue(message):
                               properties=pika.BasicProperties(
                                   delivery_mode=2,
                               ))
-    except Exception:
+    except Exception as e:
         syslog(LOG_ERR, 'Unable to push message to queue, exiting without updating cached profile_info')
+        syslog(LOG_ERR, repr(e))
         
 
 def hasProfileUpdated(profile):
@@ -55,20 +59,20 @@ def hasProfileUpdated(profile):
         sys.exit(1)
 
     try:
-        with open(CACHE_DIR + "profiles/" + profile, "rt") as cached_profile_file:
+        with open(CACHE_DIR + profile, "rt") as cached_profile_file:
             cached_profile = cached_profile_file.read()
     except FileNotFoundError:
         syslog(LOG_INFO, "cached profile " + profile + " does not exist, creating one and continuing")
-        updateCachedFile(CACHE_DIR + "profiles/" + profile, new_profile)
+        updateCachedFile(CACHE_DIR + profile, new_profile)
         return False
     except IOError as e:
         syslog(LOG_ERR, "Unable to open cached profile: " + profile)
-        syslog(LOG_ERR,e)
+        syslog(LOG_ERR, repr(e))
         sys.exit(1)
     
     for line in new_profile.splitlines():
         if line not in cached_profile:
-            updateCachedFile(CACHE_DIR + "profiles/" + profile, new_profile)
+            updateCachedFile(CACHE_DIR + profile, new_profile)
             return True
     return False
 
@@ -77,8 +81,10 @@ try:
     connection = pika.BlockingConnection(pika.ConnectionParameters(QUEUE_HOST))
     channel = connection.channel()
     channel.queue_declare(queue='build-queue', durable=True)
-except:
-    syslog(LOG_ERR, 'Error connecting to RabbitMQ server')
+except (pika.exceptions.AMQPError, pika.exceptions.ChannelError) as e:
+    syslog(LOG_ERR, 'Error connecting to RabbitMQ server:')
+    syslog(LOG_ERR, repr(e))
+    sys.exit(1)
 
 # Grab the profile info file
 try:
@@ -103,15 +109,15 @@ except FileNotFoundError:
     sys.exit(0)
 except IOError as e:
     syslog(LOG_ERR, "Unable to open cached info file:")
-    syslog(LOG_ERR,e)
+    syslog(LOG_ERR, repr(e))
 
 # Compare the files
 for line in new_info.splitlines():
     # If a line is new
     if line not in cached_info:
         profile = ET.fromstring(line).text
-        # And is a continuous integration profile
-        if ".testing.internal.json" in profile:
+        # And is a profile we are interested in
+        if PROFILE_MATCH in profile:
             syslog(LOG_INFO, "CI profile rebuilt: " + profile)
             # Check to see if it has changed since we last ran
             if hasProfileUpdated(profile):
@@ -120,9 +126,10 @@ for line in new_info.splitlines():
                 # And if so, push a message to the queue
                 pushMessageToQueue(profile)
             else:
-                syslog(LOG_INFO, "Profile has not updated:" + profile)
+                syslog(LOG_INFO, "Profile has not updated: " + profile)
 
 # Update the cached info file before exixting
-syslog(LOG_INFO, "updating cached profile_info")
+syslog(LOG_INFO, "Updating cached profile_info")
 updateCachedFile( CACHE_DIR + "cached_info.xml", new_info)
+syslog(LOG_INFO, "Exiting normally")
 sys.exit(0)
