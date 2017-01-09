@@ -1,0 +1,22 @@
+{
+  "builders":
+  [
+    {
+      "type": "openstack",
+      "ssh_username": "fedora",
+      "image_name": "$NAME",
+      "source_image": "6a8e0908-0d8e-4f26-88bf-4c045421c30d",
+      "flavor": "m1.small",
+      "networks": [ "2b67533c-8c30-4e07-a6c4-ddde7250eb3d" ],
+      "instance_metadata": { $METADATA }
+        
+    } 
+  ],
+  "provisioners":
+  [
+    {
+      "type": "shell",
+      "inline": ["quattor fetch; quattor configure --all" ]
+    }
+      ]
+}

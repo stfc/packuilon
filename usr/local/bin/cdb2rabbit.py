@@ -17,8 +17,8 @@ try:
     PROFILE_DIR_URL = configparser.get('cdb2rabbit','PROFILE_DIR_URL')
     PROFILE_MATCH = configparser.get('cdb2rabbit','PROFILE_MATCH')
     CACHE_DIR = configparser.get('cdb2rabbit','CACHE_DIR')
-    QUEUE = configparser.get('cdb2rabbit','QUEUE')
-    QUEUE_HOST = configparser.get('cdb2rabbit','QUEUE_HOST')
+    QUEUE = configparser.get('global','QUEUE')
+    QUEUE_HOST = configparser.get('global','QUEUE_HOST')
 except:
     print('Unable to read from config file')
     sys.exit(1)
@@ -42,13 +42,12 @@ def pushMessageToQueue(message):
     except Exception as e:
         syslog(LOG_ERR, 'Unable to push message to queue, exiting without updating cached profile_info')
         syslog(LOG_ERR, repr(e))
-        
 
-def hasProfileUpdated(profile):
+def downloadProfile(profile):
     syslog(LOG_INFO, 'Downloading profile ' + profile)
     try:
-        with urlopen(PROFILE_DIR_URL + profile) as response:
-            new_profile = response.read().decode('utf-8')
+        with urlopen(PROFILE_DIR_URL + "/" + profile) as response:
+            profile_contents = response.read().decode('utf-8')
     except URLError as e:
         if hasattr(e, 'code'):
             syslog(LOG_ERR, "Error retriving profile: " + profile)
@@ -57,9 +56,13 @@ def hasProfileUpdated(profile):
             syslog(LOG_ERR,'We failed to reach a server.')
             syslog(LOG_ERR,'Reason: ', e.reason)
         sys.exit(1)
+  
+    return profile_contents
 
+
+def hasProfileUpdated(profile_name, new_profile_contents):
     try:
-        with open(CACHE_DIR + profile, "rt") as cached_profile_file:
+        with open(CACHE_DIR + "/" + profile_name, "rt") as cached_profile_file:
             cached_profile = cached_profile_file.read()
     except FileNotFoundError:
         syslog(LOG_INFO, "cached profile " + profile + " does not exist, creating one and continuing")
@@ -70,9 +73,9 @@ def hasProfileUpdated(profile):
         syslog(LOG_ERR, repr(e))
         sys.exit(1)
     
-    for line in new_profile.splitlines():
+    for line in new_profile_contents.splitlines():
         if line not in cached_profile:
-            updateCachedFile(CACHE_DIR + profile, new_profile)
+            updateCachedFile(CACHE_DIR + profile, new_profile_contents)
             return True
     return False
 
@@ -101,7 +104,7 @@ except URLError as e:
 
 # Open the cached profile info file
 try:
-    with open(CACHE_DIR + "cached_info.xml", "rt") as cached_info_file:
+    with open(CACHE_DIR + "/" + "cached_info.xml", "rt") as cached_info_file:
         cached_info = cached_info_file.read()
 except FileNotFoundError:
     syslog(LOG_INFO, "Cached info file does not exist, creating one and exiting")
@@ -119,17 +122,18 @@ for line in new_info.splitlines():
         # And is a profile we are interested in
         if PROFILE_MATCH in profile:
             syslog(LOG_INFO, "CI profile rebuilt: " + profile)
+            profile_contents = downloadProfile(profile)
             # Check to see if it has changed since we last ran
-            if hasProfileUpdated(profile):
+            if hasProfileUpdated(profile, profile_contents):
                 syslog(LOG_INFO, "Profile has updated: " + profile)
                 syslog(LOG_INFO, "Pushing message to queue for build")
-                # And if so, push a message to the queue
-                pushMessageToQueue(profile)
+                # And if so, push a message containing the profile to the queue
+                pushMessageToQueue(profile_contents)
             else:
                 syslog(LOG_INFO, "Profile has not updated: " + profile)
 
 # Update the cached info file before exixting
 syslog(LOG_INFO, "Updating cached profile_info")
-updateCachedFile( CACHE_DIR + "cached_info.xml", new_info)
+updateCachedFile( CACHE_DIR + "/" + "cached_info.xml", new_info)
 syslog(LOG_INFO, "Exiting normally")
 sys.exit(0)
