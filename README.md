@@ -1,10 +1,12 @@
-# packquilon
+# Packuilon
 
-A collection of scripts to allow OpenStack VM images to be automatically built based on personalities from Aquilon (http://www.quattor.org). It uses Packer (https://www.packer.io) to do the image building.
+A collection of scripts to allow OpenStack VM images to be automatically built based on personalities from Aquilon (http://www.quattor.org). It uses Packer (https://www.packer.io) to do the image building. 
+
+I had to add some functionality to Packer to get this to work, if this PR is merged you can use mainline packer, otherwise you'll have to build it yourself from my branch: https://github.com/mitchellh/packer/pull/4361
 
 # cdb2rabbit
 
-Checks for changes to the continuous integration profiles (or profiles defined by a "name contains string" check), and pushes a message to a RabbitMQ queue. Can be called by cron, or by quattor (using ncm-cdispd). The message is just the new profile.
+Checks for changes to the continuous integration profiles (or profiles defined by a "name contains string" check), and pushes a message to a RabbitMQ queue. Can be called by cron, or by quattor (using ncm-cdispd). The message is just the profile object (json encoded).
 
 #rabbit2packer
 
@@ -23,6 +25,6 @@ The source image for each operating system type is defined in a separate config 
 
 If there is no matching key for the image the build will be skipped. Otherwise Packer will be started with the created build file.
 
-The instance metadata will be intepreted by a script running on our openstack 'stack' which will change the build instances personality to the required. (https://github.com/stfc/SCD-OpenStack-Utils/tree/master/OpenStack-Rabbit-Consumer)
+The instance metadata will be intepreted by a script running on our openstack 'stack' which will change the build hostname's personality to the one found in the message (https://github.com/stfc/SCD-OpenStack-Utils/tree/master/OpenStack-Rabbit-Consumer)
 
-The packer shell provisioner then runs a fetch+configure with the new profile.
+The packer shell provisioner then runs a fetch+configure with the new profile, and assuming that doesn't error, a glance image will be created called $personality-$os
