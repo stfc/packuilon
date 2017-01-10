@@ -24,10 +24,24 @@ try:
     OS_AUTH_FILE = configparser.get('rabbit2packer','OS_AUTH_FILE')
     QUEUE = configparser.get('global','QUEUE')
     QUEUE_HOST = configparser.get('global','QUEUE_HOST')
+    IMAGES_CONFIG = configparser.get('rabbit2packer','IMAGES_CONFIG')
 except Exception as e:
     syslog(LOG_ERR, 'Error reading config file')
     syslog(LOG_ERR, repr(e))
     sys.exit(1)
+
+try:
+    with open(IMAGES_CONFIG) as images_JSON:    
+        IMAGES = json.load(images_JSON)
+except IOError as e:
+    syslog(LOG_ERR, repr(e))
+    syslog(LOG_ERR, "Could not open images config file.")
+    sys.exit(1)
+except ValueError as e:
+    syslog(LOG_ERR, repr(e))
+    syslog(LOG_ERR, "Could not decode images config file, malformed json?")
+    sys.exit(1)
+
 
 
 exitFlag = 0
@@ -38,9 +52,11 @@ class imageBuilder:
         self.os = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
     def name(self):
         return "%s-%s" % (self.personality, self.os)
+    def imageID(self):
+        return IMAGES[self.os]
     def metadata(self):
-        self.metadata = '"AQ_PERSONALITY": "%s"\n' % self.personality
-        #self.metadata += '"AQ_OS": "%s"\n' % self.os
+        self.metadata = '"AQ_PERSONALITY": "%s",\n' % self.personality
+        self.metadata += '"AQ_OS": "%s"\n' % self.os
         return self.metadata
 
 class workerThread (threading.Thread):
@@ -102,8 +118,17 @@ def run_packer_subprocess(image):
         syslog(LOG_ERR, repr(e))
         sys.exit(1)
 
+
+    try:
+        source_image_ID = image.imageID()
+    except KeyError as e:
+        syslog(LOG_ERR, "Source image for " + image_name + " not defined in " + IMAGES_CONFIG + ". Skipping build")
+        syslog(LOG_ERR, "Check for relevant OS entry in " + IMAGES_CONFIG)
+        return 1
+
     template = template.replace("$METADATA", image.metadata())
     template = template.replace("$NAME", image_name)
+    template = template.replace("$IMAGE", source_image_ID)
 
     #"AQ_ARCHETYPE": "$ARCHETYPE",
     #                "AQ_DOMAIN": "$DOMAIN",
@@ -122,12 +147,14 @@ def run_packer_subprocess(image):
     except IOError as e:
         syslog(LOG_ERR, "Unable to write build file: %s" %  build_file_path )
         syslog(LOG_ERR, repr(e))        
+        sys.exit(1)
 
     try:
         buildLog = open( log_file_path, "wt")
     except IOError as e:
         syslog(LOG_ERR, "Unable to write to build log file: %s" %  log_file_path )
-        syslog(LOG_ERR, repr(e))        
+        syslog(LOG_ERR, repr(e))
+        sys.exit(1)
     
     packerCmd = ( "source {auth};"
                   "export OS_TENANT_ID=$OS_PROJECT_ID;"
