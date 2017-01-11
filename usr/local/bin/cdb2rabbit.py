@@ -19,6 +19,8 @@ try:
     CACHE_DIR = configparser.get('cdb2rabbit','CACHE_DIR')
     QUEUE = configparser.get('global','QUEUE')
     QUEUE_HOST = configparser.get('global','QUEUE_HOST')
+    RABBIT_USER = configparser.get('global','RABBIT_USER')
+    RABBIT_PW = configparser.get('global',' RABBIT_PW')
 except:
     print('Unable to read from config file')
     sys.exit(1)
@@ -81,9 +83,18 @@ def hasProfileUpdated(profile_name, new_profile_contents):
 
 # Open connection to RabbitMQ host
 try:
-    connection = pika.BlockingConnection(pika.ConnectionParameters(QUEUE_HOST))
+    credentials = pika.PlainCredentials(RABBIT_USER,RABBIT_PW)
+    parameters = pika.ConnectionParameters(QUEUE_HOST,
+                                       5672,
+                                       "/",
+                                       credentials,
+                                       connection_attempts=10,
+                                       retry_delay=2)
+    connection = pika.BlockingConnection(parameters)
+
+    #connection = pika.BlockingConnection(pika.ConnectionParameters(QUEUE_HOST))
     channel = connection.channel()
-    channel.queue_declare(queue='build-queue', durable=True)
+    channel.queue_declare(queue=BUILD_QUEUE, durable=True)
 except (pika.exceptions.AMQPError, pika.exceptions.ChannelError) as e:
     syslog(LOG_ERR, 'Error connecting to RabbitMQ server:')
     syslog(LOG_ERR, repr(e))
