@@ -3,7 +3,7 @@
   [
     {
       "type": "openstack",
-      "ssh_username": "fedora",
+      "ssh_username": "root",
       "image_name": "$NAME",
       "source_image": "$IMAGE",
       "flavor": "m1.small",
@@ -16,7 +16,7 @@
   [
     {
       "type": "shell",
-      "inline": ["quattor fetch; quattor configure --all" ]
+      "inline": ["bash /etc/update_ccm_conf.sh; quattor fetch; quattor configure --all" ]
     }
       ]
 }

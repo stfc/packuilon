@@ -23,10 +23,11 @@ try:
     BUILD_FILE_DIR = configparser.get('rabbit2packer','BUILD_FILE_DIR')
     OS_AUTH_FILE = configparser.get('rabbit2packer','OS_AUTH_FILE')
     QUEUE = configparser.get('global','QUEUE')
-    QUEUE_HOST = configparser.get('global','QUEUE_HOST')
     IMAGES_CONFIG = configparser.get('rabbit2packer','IMAGES_CONFIG')
+    RABBIT_HOST = configparser.get('global','RABBIT_HOST')
+    RABBIT_PORT = configparser.get('global','RABBIT_PORT')
     RABBIT_USER = configparser.get('global','RABBIT_USER')
-    RABBIT_PW = configparser.get('global',' RABBIT_PW')
+    RABBIT_PW = configparser.get('global','RABBIT_PW')
 except Exception as e:
     syslog(LOG_ERR, 'Error reading config file')
     syslog(LOG_ERR, repr(e))
@@ -69,15 +70,15 @@ class workerThread (threading.Thread):
     def run(self):
         syslog(LOG_INFO, "Starting " + self.name)
         credentials = pika.PlainCredentials(RABBIT_USER,RABBIT_PW)
-        parameters = pika.ConnectionParameters(QUEUE_HOST,
-                                       5672,
+        parameters = pika.ConnectionParameters(RABBIT_HOST,
+                                       RABBIT_PORT,
                                        "/",
                                        credentials,
                                        connection_attempts=10,
                                        retry_delay=2)
         connection = pika.BlockingConnection(parameters)
 
-        #connection = pika.BlockingConnection(pika.ConnectionParameters(host=QUEUE_HOST))
+        #connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBIT_HOST))
         channel = connection.channel()
         channel.queue_declare(
             queue=QUEUE, 
