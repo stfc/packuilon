@@ -19,7 +19,7 @@ try:
     CACHE_DIR = configparser.get('cdb2rabbit','CACHE_DIR')
     QUEUE = configparser.get('global','QUEUE')
     RABBIT_HOST = configparser.get('global','RABBIT_HOST')
-    RABBIT_PORT = configparser.get('global','RABBIT_PORT')
+    RABBIT_PORT = configparser.getint('global','RABBIT_PORT')
     RABBIT_USER = configparser.get('global','RABBIT_USER')
     RABBIT_PW = configparser.get('global','RABBIT_PW')
 except:
@@ -95,7 +95,7 @@ try:
 
     #connection = pika.BlockingConnection(pika.ConnectionParameters(RABBIT_HOST))
     channel = connection.channel()
-    channel.queue_declare(queue=BUILD_QUEUE, durable=True)
+    channel.queue_declare(queue=QUEUE, durable=True)
 except (pika.exceptions.AMQPError, pika.exceptions.ChannelError) as e:
     syslog(LOG_ERR, 'Error connecting to RabbitMQ server:')
     syslog(LOG_ERR, repr(e))

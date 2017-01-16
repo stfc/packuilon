@@ -25,7 +25,7 @@ try:
     QUEUE = configparser.get('global','QUEUE')
     IMAGES_CONFIG = configparser.get('rabbit2packer','IMAGES_CONFIG')
     RABBIT_HOST = configparser.get('global','RABBIT_HOST')
-    RABBIT_PORT = configparser.get('global','RABBIT_PORT')
+    RABBIT_PORT = configparser.getint('global','RABBIT_PORT')
     RABBIT_USER = configparser.get('global','RABBIT_USER')
     RABBIT_PW = configparser.get('global','RABBIT_PW')
 except Exception as e:
