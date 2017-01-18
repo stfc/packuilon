@@ -22,8 +22,9 @@ try:
     RABBIT_PORT = configparser.getint('global','RABBIT_PORT')
     RABBIT_USER = configparser.get('global','RABBIT_USER')
     RABBIT_PW = configparser.get('global','RABBIT_PW')
-except:
-    print('Unable to read from config file')
+except Exception as e:
+    syslog(LOG_ERR, 'Unable to read from config file')
+    syslog(LOG_ERR, repr(e))
     sys.exit(1)
 
 def updateCachedFile(file_name, contents):
