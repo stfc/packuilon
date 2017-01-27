@@ -58,8 +58,8 @@ class imageBuilder:
     def imageID(self):
         return IMAGES[self.os]
     def metadata(self):
-        self.metadata = '"AQ_PERSONALITY": "%s",\n' % self.personality
-        self.metadata += '"AQ_OS": "%s"\n' % self.os
+        self.metadata = '"AQ_PERSONALITY": "%s"\n' % self.personality
+        #self.metadata += '"AQ_OS": "%s"\n' % self.os
         return self.metadata
 
 class workerThread (threading.Thread):
