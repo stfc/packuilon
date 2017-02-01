@@ -21,7 +21,8 @@ try:
     PACKER_TEMPLATE = configparser.get('rabbit2packer','PACKER_TEMPLATE')
     LOG_DIR = configparser.get('rabbit2packer','LOG_DIR')
     BUILD_FILE_DIR = configparser.get('rabbit2packer','BUILD_FILE_DIR')
-    OS_AUTH_FILE = configparser.get('rabbit2packer','OS_AUTH_FILE')
+    PACKER_AUTH_FILE = configparser.get('rabbit2packer','PACKER_AUTH_FILE')
+    ADMIN_AUTH_FILE = configparser.get('rabbit2packer','ADMIN_AUTH_FILE')
     QUEUE = configparser.get('global','QUEUE')
     IMAGES_CONFIG = configparser.get('rabbit2packer','IMAGES_CONFIG')
     RABBIT_HOST = configparser.get('global','RABBIT_HOST')
@@ -168,13 +169,17 @@ def run_packer_subprocess(image):
         syslog(LOG_ERR, repr(e))
         sys.exit(1)
     
-    packerCmd = ( "source {auth};"
+    packerCmd = ( "source {packer_auth};"
                   "export OS_TENANT_ID=$OS_PROJECT_ID;"
                   "export OS_DOMAIN_NAME=$OS_USER_DOMAIN_NAME;"  
-                  "packer.io build {build_file}"
+                  "packer.io build {build_file} &&"
+                  "source {admin_auth} &&" 
+                  "rename-old-images.sh {name}"
                 ).format(
-                    auth=OS_AUTH_FILE, 
-                    build_file=build_file_path
+                    packer_auth=PACKER_AUTH_FILE, 
+                    build_file=build_file_path,
+                    name=image_name,
+                    admin_auth=ADMIN_AUTH_FILE
                 )
 
     syslog(LOG_INFO, "packer build starting, see: " + log_file_path + " for details")
