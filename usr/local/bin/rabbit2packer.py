@@ -53,14 +53,23 @@ exitFlag = 0
 class imageBuilder:
     def __init__(self, profile_object):
         self.personality = profile_object["system"]["personality"]["name"]
-        self.os = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
+        self.os_string = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
+        print( "staring" )
+        for os in IMAGES:
+            if self.os_string.startswith(os):
+                for ver in IMAGES[os]:
+                    if self.os_string == os + ver:
+                        self.os = os
+                        self.os_ver = ver
+                        self.imageID = IMAGES[self.os][self.os_ver]
     def name(self):
-        return "%s-%s" % (self.personality, self.os)
+        return "%s-%s" % (self.personality, self.os_string)
     def imageID(self):
-        return IMAGES[self.os]
+        return self.imageID
     def metadata(self):
-        self.metadata = '"AQ_PERSONALITY": "%s"\n' % self.personality
-        #self.metadata += '"AQ_OS": "%s"\n' % self.os
+        self.metadata = '"AQ_PERSONALITY": "%s",\n' % self.personality
+        self.metadata += '"AQ_OS": "%s",\n' % self.os
+        self.metadata += '"AQ_OSVERSION": "%s"\n' % self.os_ver
         return self.metadata
 
 class workerThread (threading.Thread):
@@ -98,14 +107,16 @@ def worker_loop(threadName, channel):
             channel.basic_ack(method_frame.delivery_tag)
             try:
                 profile_object = json.loads(body.decode())
-                image = imageBuilder(profile_object)
             except ValueError as e:
                 syslog(LOG_ERR, repr(e))
                 syslog(LOG_ERR, threadName + ": could not decode profile, malformed json? Continuing")
                 continue
+
+            try:
+                image = imageBuilder(profile_object)
             except KeyError as e:
                 syslog(LOG_ERR, repr(e))
-                syslog(LOG_ERR, threadName + ": profile did not contain expected data stucture, malformed json? Continuing")
+                syslog(LOG_ERR, threadName + ": source imge was not found, check IMAGES_CONFIG. Continuing")
                 continue
             syslog(LOG_ERR, "%s processing %s" % (threadName, image.name()))
             if (run_packer_subprocess(image) != 0):
@@ -133,7 +144,7 @@ def run_packer_subprocess(image):
 
 
     try:
-        source_image_ID = image.imageID()
+        source_image_ID = image.imageID
     except KeyError as e:
         syslog(LOG_ERR, "Source image for " + image_name + " not defined in " + IMAGES_CONFIG + ". Skipping build")
         syslog(LOG_ERR, "Check for relevant OS entry in " + IMAGES_CONFIG)
