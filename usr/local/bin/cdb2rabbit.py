@@ -79,7 +79,7 @@ def hasProfileUpdated(profile_name, new_profile_contents):
     
     for line in new_profile_contents.splitlines():
         if line not in cached_profile:
-            updateCachedFile(CACHE_DIR + profile_name, new_profile_contents)
+            updateCachedFile(CACHE_DIR + "/" + profile_name, new_profile_contents)
             return True
     return False
 
