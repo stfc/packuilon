@@ -54,7 +54,8 @@ class imageBuilder:
     def __init__(self, profile_object):
         self.personality = profile_object["system"]["personality"]["name"]
         self.os_string = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
-        print( "staring" )
+        self.os = ""
+        self.os_ver = ""
         for os in IMAGES:
             if self.os_string.startswith(os):
                 for ver in IMAGES[os]:
@@ -62,6 +63,8 @@ class imageBuilder:
                         self.os = os
                         self.os_ver = ver
                         self.imageID = IMAGES[self.os][self.os_ver]
+        if not (self.os and self.os_ver):
+            raise KeyError('os and os_ver not found in the source image dict')
     def name(self):
         return "%s-%s" % (self.personality, self.os_string)
     def imageID(self):
@@ -73,9 +76,9 @@ class imageBuilder:
         return self.metadata
 
 class workerThread (threading.Thread):
-    def __init__(self, name): #threadID, name):
+    def __init__(self, name):
         threading.Thread.__init__(self)
-        #self.threadID = threadID
+
         self.name = name
     def run(self):
         syslog(LOG_INFO, "Starting " + self.name)
@@ -88,7 +91,6 @@ class workerThread (threading.Thread):
                                        retry_delay=2)
         connection = pika.BlockingConnection(parameters)
 
-        #connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBIT_HOST))
         channel = connection.channel()
         channel.queue_declare(
             queue=QUEUE, 
@@ -101,9 +103,27 @@ class workerThread (threading.Thread):
 
 def worker_loop(threadName, channel):
     while not exitFlag:
-        method_frame, header_frame, body = channel.basic_get(QUEUE)
+        try:
+            method_frame, header_frame, body = channel.basic_get(QUEUE)
+        except pika.exceptions.ConnectionClosed as e:
+            credentials = pika.PlainCredentials(RABBIT_USER,RABBIT_PW)
+            parameters = pika.ConnectionParameters(RABBIT_HOST,
+                                           RABBIT_PORT,
+                                           "/",
+                                           credentials,
+                                           connection_attempts=10,
+                                           retry_delay=2)
+            connection = pika.BlockingConnection(parameters)
+
+            channel = connection.channel()
+            channel.queue_declare(
+                queue=QUEUE,
+                durable=True
+            )
+            syslog(LOG_INFO, threadName + ": reconnecting to channel")
+            continue
+
         if method_frame:
-            #syslog(LOG_ERR, method_frame, header_frame, body)
             channel.basic_ack(method_frame.delivery_tag)
             try:
                 profile_object = json.loads(body.decode())
@@ -206,14 +226,6 @@ for i in range(THREAD_COUNT):
     thread = workerThread("Thread-" + str(i + 1))
     thread.start()
     threads.append(thread)
-
-
-#exitFlag = 1
-
-# Wait for all threads to complete
-#for t in threads:
-#    t.join()
-#syslog(LOG_ERR, "Exiting Main Thread")
 
 while True:
     time.sleep(5)
