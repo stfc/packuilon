@@ -121,7 +121,7 @@ try:
         cached_info = cached_info_file.read()
 except FileNotFoundError:
     syslog(LOG_INFO, "Cached info file does not exist, creating one and exiting")
-    updateCachedFile( CACHE_DIR + "cached_info.xml", new_info)
+    updateCachedFile( CACHE_DIR + "/" + "cached_info.xml", new_info)
     sys.exit(0)
 except IOError as e:
     syslog(LOG_ERR, "Unable to open cached info file:")
