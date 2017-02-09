@@ -142,7 +142,7 @@ def worker_loop(threadName, channel):
             if (run_packer_subprocess(image) != 0):
                 syslog(LOG_ERR, threadName + ": packer exited with non zero exit code, build failed")
             else:
-                syslog(LOG_INFO, threadName + ": image built succesfully")
+                syslog(LOG_INFO, threadName + ": image built successfully")
             
         time.sleep(2)
 
