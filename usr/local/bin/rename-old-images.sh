@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eu
 
-imagename=$1
+imagename=$*
 DATE=`date +%Y-%m-%d`
 
 #list all the images that have the same name as the one just added
