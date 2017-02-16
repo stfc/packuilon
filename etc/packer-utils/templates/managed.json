@@ -1,0 +1,35 @@
+{
+  "builders":
+  [
+    {
+      "type": "openstack",
+      "ssh_username": "root",
+      "image_name": "$NAME AQ",
+      "source_image": "$IMAGE",
+      "flavor": "m1.tiny",
+      "networks": [ "2b67533c-8c30-4e07-a6c4-ddde7250eb3d" ],
+      "instance_metadata": { $METADATA },
+      "user_data_file": "/etc/packer-utils/cloud-init.txt"
+        
+    } 
+  ],
+  "provisioners":
+  [
+    {
+      "type": "file",
+      "source": "/etc/packer-utils/templates/update_ccm_managed.sh",
+      "destination": "/root/update_ccm_managed.sh"
+    },
+    {
+      "type": "shell",
+      "inline": ["bash /root/update_ccm_managed.sh" ]
+    }
+  ],
+  "post-processors":
+  [
+    {
+      "type": "shell-local",
+      "inline": ["source /etc/packer-utils/admin-auth.sh; rename-old-images.sh $NAME AQ"]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+    "DEFAULT": 
+	[ 
+		"/etc/packer-utils/templates/unmanaged.json",
+		"/etc/packer-utils/templates/managed.json"
+	],
+    "test-sl7x-x86_64": [ "/etc/packer-utils/templates/managed.json" ]
+}

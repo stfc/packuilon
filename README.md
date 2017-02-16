@@ -12,6 +12,23 @@ Listens to the RabbitMQ queue. When one is received it creates a packer build fi
 
 The build file is created from a template which contains the source image, network etc. It should contain the strings $NAME, $IMAGE and $METADATA which will be replaced by the name of the image, the source image and the instance metadata (currently just the AQ\_PERSONALITY, AQ\_OS and AQ\_OSVERSION).
 
+The template file to be used is defined in `PACKER_TEMPLATE_MAP` (`/etc/packer-utils/template-map.json` by default) which is set out as follows:
+
+
+```
+{
+    "DEFAULT":
+        [
+                "/etc/packer-utils/templates/unmanaged.json",
+                "/etc/packer-utils/templates/managed.json"
+        ],
+    "test-sl7x-x86_64": [ "/etc/packer-utils/templates/managed.json" ]
+}
+```
+
+If the image has an entry (such as test-sl7x above) then that template will be used, otherwise the `DEFAULT` entry will be used. Multiple templates can be defined and they will all be built (currently one after another). Defining an entry prevents the default template(s) being built for that host.
+
+
 The source image for each operating system type is defined in a separate config file defined in the main config.ini (`/etc/packer-utils/source-images.json` by default). The file contains key value pair structure, with the key being the OS, the sub-key being the OS_VERSION, and the value of that subkey being the image ID to use. For example:
 
 ```
@@ -43,7 +60,7 @@ The `image_factory` personality installs packer, packuilon, the SCD specific con
 aq bind_server --service image-factory --instance scd-cloud-image-factory --hostname $hostname
 ```
 
-The things you will need to source manually are the openstack credential files defined in the rabbit2packer section of the config. The `PACKER_AUTH_FILE` only needs to be able to create machines and images in its own project (which keeps things nicely partitioned), but in order to update memberships you need a 'admin' type account, hence the need for `ADMIN_AUTH_FILE`.
+The things you will need to source manually are the openstack credential files defined in the rabbit2packer section of the config. The `PACKER_AUTH_FILE` only needs to be able to create machines and images in its own project (which keeps things nicely partitioned). A separate admin auth file is sourced in the post-processor section of the templates to update the memberships and rename the old images.
 
 Currently you also need to sort the certbundle out so packer can talk to openstack. Manually copying over `/etc/ssl/certs/ca-bundle.crt` from a openstack machine does the trick.
 

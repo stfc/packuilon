@@ -17,12 +17,19 @@
   [
     {
       "type": "file",
-      "source": "/etc/packer-utils/update_ccm_conf.sh",
-      "destination": "/root/update_ccm_conf.sh"
+      "source": "/etc/packer-utils/templates/update_ccm_managed.sh",
+      "destination": "/root/update_ccm_unmanaged.sh"
     },
     {
       "type": "shell",
-      "inline": ["bash /root/update_ccm_conf.sh" ]
+      "inline": ["bash /root/update_ccm_unmanaged.sh" ]
+    }
+  ],
+  "post-processors":
+  [
+    {
+      "type": "shell-local",
+      "inline": ["source /etc/packer-utils/admin-auth.sh; rename-old-images.sh $NAME"]
     }
   ]
 }
