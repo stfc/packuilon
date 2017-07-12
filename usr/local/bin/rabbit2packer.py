@@ -3,7 +3,7 @@ import sys
 import pika
 from syslog import syslog, LOG_ERR, LOG_INFO
 from configparser import SafeConfigParser
-import subprocess  
+import subprocess
 import threading
 import time
 import json
@@ -34,7 +34,7 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    with open(IMAGES_CONFIG) as images_JSON:    
+    with open(IMAGES_CONFIG) as images_JSON:
         IMAGES = json.load(images_JSON)
 except IOError as e:
     syslog(LOG_ERR, repr(e))
@@ -46,7 +46,7 @@ except ValueError as e:
     sys.exit(1)
 
 try:
-    with open(PACKER_TEMPLATE_MAP) as template_map_JSON:    
+    with open(PACKER_TEMPLATE_MAP) as template_map_JSON:
         TEMPLATE_MAP = json.load(template_map_JSON)
 except IOError as e:
     syslog(LOG_ERR, repr(e))
@@ -64,22 +64,15 @@ exitFlag = 0
 class imageBuilder:
     def __init__(self, profile_object):
         self.personality = profile_object["system"]["personality"]["name"]
-        self.os_string = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
-        self.os = ""
-        self.os_ver = ""
-        for os in IMAGES:
-            if self.os_string.startswith(os):
-                for ver in IMAGES[os]:
-                    if self.os_string == os + ver:
-                        self.os = os
-                        self.os_ver = ver
-                        self.imageID = IMAGES[self.os][self.os_ver]
-        if not (self.os and self.os_ver):
-            raise KeyError('os and os_ver not found in the source image dict')
+        self.os = profile_object["system"]["os"]["distribution"]["name"]
+        self.os_ver = profile_object["system"]["os"]["version"]["name"]
+        self.imageID = IMAGES[self.os][self.os_ver]
+        if not (self.imageID):
+            raise KeyError('source image not found in dict for os %s and os_ver %s' % self.os, self.os_ver)
     def name(self):
-        return "%s-%s" % (self.personality, self.os_string)
+        return "%s-%s%s" % (self.personality, self.os, self.os_ver)
     def prettyName(self):
-        return "%s %s" % (self.os_string, self.personality)
+        return "%s%s %s" % (self.os, self.os_ver, self.personality)
     def imageID(self):
         return self.imageID
     def metadata(self):
@@ -106,7 +99,7 @@ class workerThread (threading.Thread):
 
         channel = connection.channel()
         channel.queue_declare(
-            queue=QUEUE, 
+            queue=QUEUE,
             durable=True
         )
 
@@ -149,11 +142,11 @@ def worker_loop(threadName, channel):
                 image = imageBuilder(profile_object)
             except KeyError as e:
                 syslog(LOG_ERR, repr(e))
-                syslog(LOG_ERR, threadName + ": source imge was not found, check IMAGES_CONFIG. Continuing")
+                syslog(LOG_ERR, threadName + ": source image was not found, check IMAGES_CONFIG. Continuing")
                 continue
             syslog(LOG_ERR, "%s processing %s" % (threadName, image.name()))
             run_packer_subprocess(threadName, image)
-            
+
         time.sleep(2)
 
 
@@ -162,7 +155,7 @@ def run_packer_subprocess(threadName, image):
     image_name=image.name()
     image_display_name=image.prettyName()
     image_metadata=image.metadata()
-        
+
     try:
         source_image_ID = image.imageID
     except KeyError as e:
@@ -172,11 +165,11 @@ def run_packer_subprocess(threadName, image):
 
     templates = TEMPLATE_MAP.get(image_name)
 
-    if templates is None:        
+    if templates is None:
         templates = TEMPLATE_MAP.get("DEFAULT")
         syslog(LOG_INFO, "No Packer template defined for " + image_name + ". Using the default values")
 
-    if templates is None:        
+    if templates is None:
         syslog(LOG_INFO, "No Packer template defined for Default values. No builds will occur.")
 
     for template in templates:
@@ -223,13 +216,13 @@ def run_packer_subprocess(threadName, image):
             syslog(LOG_ERR, "Unable to write to build log file: %s" %  log_file_path )
             syslog(LOG_ERR, repr(e))
             sys.exit(1)
-        
+
         packerCmd = ( "source {packer_auth};"
                       "export OS_TENANT_ID=$OS_PROJECT_ID;"
-                      "export OS_DOMAIN_NAME=$OS_USER_DOMAIN_NAME;"  
-                      "packer.io build {build_file}"
+                      "export OS_DOMAIN_NAME=$OS_USER_DOMAIN_NAME;"
+                      "packer.io build {build_file};"
                     ).format(
-                        packer_auth=PACKER_AUTH_FILE, 
+                        packer_auth=PACKER_AUTH_FILE,
                         build_file=build_file_path
                     )
 
