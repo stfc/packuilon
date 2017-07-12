@@ -206,14 +206,15 @@ def run_packer_subprocess(threadName, image):
 
 
         build_file_path=BUILD_FILE_DIR + '/' + image_name + "." + template_name + ".json"
-        log_file_path=LOG_DIR + '/' + image_name + "." + template_name + ".log"
+        build_start_time = int(time.time())
+        log_file_path=LOG_DIR + '/' + image_name + "." + template_name + "." + repr(build_start_time) + ".log"
 
         try:
             with open( build_file_path, "wt") as buildFile:
                 buildFile.write(template)
         except IOError as e:
             syslog(LOG_ERR, "Unable to write build file: %s" %  build_file_path )
-            syslog(LOG_ERR, repr(e))        
+            syslog(LOG_ERR, repr(e))
             sys.exit(1)
 
         try:
@@ -236,6 +237,8 @@ def run_packer_subprocess(threadName, image):
 
         packerProc = subprocess.Popen(packerCmd, shell=True, stdout=buildLog, stderr=subprocess.STDOUT)
         ret_code = packerProc.wait()
+        build_finish_time = int(time.time())
+        buildLog.write("rabbit2packer: Build finished at %s (epoch) with exit code %s\n" % (build_finish_time, ret_code))
         if (ret_code != 0):
             syslog(LOG_ERR, threadName + ": packer exited with non zero exit code, " + image_name + "." + template_name+ " build failed")
         else:
@@ -251,10 +254,3 @@ for i in range(THREAD_COUNT):
 
 while True:
     time.sleep(5)
-
-
-
-
-
-
-
