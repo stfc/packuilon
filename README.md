@@ -6,7 +6,7 @@ A collection of scripts to allow OpenStack VM images to be automatically built b
 
 Checks for changes to the continuous integration profiles (or profiles defined by a "PROFILE_MATCH" string, which can be left blank for all profiles), and pushes a message to a RabbitMQ queue. Can be called by cron, or by quattor (using ncm-cdispd). The message is just the profile object (json encoded).
 
-#rabbit2packer
+# rabbit2packer
 
 Listens to the RabbitMQ queue. When one is received it creates a packer build file and starts the packer process.
 
@@ -35,8 +35,8 @@ The source image for each operating system type is defined in a separate config 
 {
     "sl": 
 	{ 
-		"7x-x86_64" : "bc4118de-23fc-4cdf-8c32-cb794778d494",
-		"6x-x86_64" : "d2eea166-b643-40f5-bb7f-ca17d2f1c6fe"
+		"7x" : "bc4118de-23fc-4cdf-8c32-cb794778d494",
+		"6x" : "d2eea166-b643-40f5-bb7f-ca17d2f1c6fe"
 	},
     "os": { "os_version" : "image uuid" }
 }
@@ -50,7 +50,7 @@ The packer shell provisioned then runs a fetch+configure with the new profile vi
 
 This process is logged in separate log for each build, found in the `LOG_DIR`. Bear in mind that these are overwritten when a new build of that image starts, so there are no historical build logs kept. This is a area for improvement if anyone is bored.
 
-#Installation
+# Installation
 
 *this is mostly SCD specific*
 
