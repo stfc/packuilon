@@ -29,16 +29,13 @@ The template file to be used is defined in `PACKER_TEMPLATE_MAP` (`/etc/packer-u
 If the image has an entry (such as test-sl7x above) then that template will be used, otherwise the `DEFAULT` entry will be used. Multiple templates can be defined and they will all be built (currently one after another). Defining an entry prevents the default template(s) being built for that host.
 
 
-The source image for each operating system type is defined in a separate config file defined in the main config.ini (`/etc/packer-utils/source-images.json` by default). The file contains key value pair structure, with the key being the OS, the sub-key being the OS_VERSION, and the value of that subkey being the image ID to use. For example:
+The source image for each operating system type is defined in a separate config file defined in the main config.ini (`/etc/packer-utils/source-images.json` by default). The file contains key value pair structure, with the key being the `os+os_version-arch` string, and the value being the image ID to use. For example:
 
 ```
 {
-    "sl": 
-	{ 
-		"7x" : "bc4118de-23fc-4cdf-8c32-cb794778d494",
-		"6x" : "d2eea166-b643-40f5-bb7f-ca17d2f1c6fe"
-	},
-    "os": { "os_version" : "image uuid" }
+    "sl6x-x86_64" : "7eb100a3-680b-4544-99cc-950b8c4f6c74",
+    "sl7x-x86_64" : "0b10e583-9e13-4878-9116-f4002846fa73",
+    "osos_version-archetype" : "this-is-not-valid"
 }
 ```
 

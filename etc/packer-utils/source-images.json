@@ -1,8 +1,5 @@
 {
-    "sl": 
-	{ 
-		"7x" : "0b10e583-9e13-4878-9116-f4002846fa73",
-		"6x" : "7eb100a3-680b-4544-99cc-950b8c4f6c74"
-	},
-    "os": { "os_version" : "this-is-not-valid" }
+    "sl6x-x86_64" : "7eb100a3-680b-4544-99cc-950b8c4f6c74",
+    "sl7x-x86_64" : "0b10e583-9e13-4878-9116-f4002846fa73",
+    "osos_version-archetype" : "this-is-not-valid"
 }
