@@ -64,21 +64,34 @@ exitFlag = 0
 class imageBuilder:
     def __init__(self, profile_object):
         self.personality = profile_object["system"]["personality"]["name"]
+        if not (self.personality):
+            raise KeyError('personality value not found in profile, cannot continue build')
+        self.archetype = profile_object["system"]["archetype"]["name"]
+        if not (self.archetype):
+            raise KeyError('archetype value not found in profile, cannot continue build')
+        self.architecture = profile_object["system"]["os"]["architecture"]
+        if not (self.architecture):
+            raise KeyError(' architecture value not found in profile, cannot continue build')
         self.os = profile_object["system"]["os"]["distribution"]["name"]
+        if not (self.os):
+            raise KeyError('OS value not found in profile, cannot continue build')
         self.os_ver = profile_object["system"]["os"]["version"]["name"]
-        self.imageID = IMAGES[self.os][self.os_ver]
+        if not (self.personality):
+            raise KeyError('os_ver value not found in profile, cannot continue build')
+        self.imageID = IMAGES["%s%s-%s" % (self.os, self.os_ver, self.architecture)]
         if not (self.imageID):
-            raise KeyError('source image not found in dict for os %s and os_ver %s' % self.os, self.os_ver)
+            raise KeyError('source image not found in dict for key %s%s-%s' % self.os, self.os_ver, self.architecture)
     def name(self):
-        return "%s-%s%s" % (self.personality, self.os, self.os_ver)
+        return "%s-%s%s-%s" % (self.personality, self.os, self.os_ver, self.architecture)
     def prettyName(self):
-        return "%s%s %s" % (self.os, self.os_ver, self.personality)
+        return "%s%s-%s %s" % (self.os, self.os_ver, self.architecture, self.personality)
     def imageID(self):
         return self.imageID
     def metadata(self):
         self.metadata = '"AQ_PERSONALITY": "%s",\n' % self.personality
         self.metadata += '"AQ_OS": "%s",\n' % self.os
-        self.metadata += '"AQ_OSVERSION": "%s"\n' % self.os_ver
+        self.metadata += '"AQ_OSVERSION": "%s-%s",\n' % (self.os_ver, self.architecture)
+        self.metadata += '"AQ_DOMAIN": "prod"\n'
         return self.metadata
 
 class workerThread (threading.Thread):
