@@ -1,8 +1,8 @@
 {
     "sl": 
 	{ 
-		"7x-x86_64" : "bc4118de-23fc-4cdf-8c32-cb794778d494",
-		"6x-x86_64" : "d2eea166-b643-40f5-bb7f-ca17d2f1c6fe"
+		"7x" : "0b10e583-9e13-4878-9116-f4002846fa73",
+		"6x" : "7eb100a3-680b-4544-99cc-950b8c4f6c74"
 	},
     "os": { "os_version" : "this-is-not-valid" }
 }
