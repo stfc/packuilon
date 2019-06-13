@@ -81,6 +81,7 @@ class imageBuilder:
         self.imageID = IMAGES["%s%s-%s" % (self.os, self.os_ver, self.architecture)]
         if not (self.imageID):
             raise KeyError('source image not found in dict for key %s%s-%s' % self.os, self.os_ver, self.architecture)
+        syslog(LOG_INFO, 'Personality: {}, Archetype: {}, OS: {}, OS Version: {}'.format(self.personality, self.archetype, self.os, self.os_ver))
     def name(self):
         return "%s-%s%s-%s" % (self.personality, self.os, self.os_ver, self.architecture)
     def prettyName(self):
@@ -88,10 +89,11 @@ class imageBuilder:
     def imageID(self):
         return self.imageID
     def metadata(self):
-        self.metadata = '"AQ_PERSONALITY": "%s",\n' % self.personality
-        self.metadata += '"AQ_OS": "%s",\n' % self.os
-        self.metadata += '"AQ_OSVERSION": "%s-%s",\n' % (self.os_ver, self.architecture)
-        self.metadata += '"AQ_DOMAIN": "prod"\n'
+        self.metadata = '"AQ_PERSONALITY": "%s", ' % self.personality
+        self.metadata += '"AQ_OS": "%s", ' % self.os
+        self.metadata += '"AQ_OSVERSION": "%s-%s", ' % (self.os_ver, self.architecture)
+        self.metadata += '"AQ_DOMAIN": "prod", '
+        self.metadata += '"AQ_ARCHETYPE": "%s"' % (self.archetype)
         return self.metadata
 
 class workerThread (threading.Thread):
