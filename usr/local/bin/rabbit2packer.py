@@ -205,14 +205,6 @@ def run_packer_subprocess(threadName, image):
         template = template.replace("$NAME", image_display_name)
         template = template.replace("$IMAGE", source_image_ID)
 
-        #"AQ_ARCHETYPE": "$ARCHETYPE",
-        #                "AQ_DOMAIN": "$DOMAIN",
-        #                "AQ_OS": "$OS",
-        #                "AQ_OSVERSION": "$OSVERSION",
-        #                "AQ_PERSONALITY": "$PERSONALITY",
-        #                "AQ_SANDBOX": "$SANDBOX"
-
-
         build_file_path=BUILD_FILE_DIR + '/' + image_name + "." + template_name + ".json"
         build_start_time = int(time.time())
         log_file_path=LOG_DIR + '/' + image_name + "." + template_name + "." + repr(build_start_time) + ".log"
