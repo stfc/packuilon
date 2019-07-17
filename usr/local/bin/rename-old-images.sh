@@ -27,8 +27,9 @@ else
 
         # Ensure visibility of image is 'shared' before attempting to manipulate members
         imagevisibility=$(openstack image show "$id" -f json | jq -r .visibility)
+        echo $id
 
-        if [ "$imagevisibility" = "shared" ]
+        if [ "$imagevisibility" == "shared" ]
         then
             # Get list of members from old image
             for member in $(glance member-list --image-id $id | grep $id | cut -d '|' -f 3);
@@ -43,21 +44,18 @@ else
             done
         fi
     done
+    
+    newimagemembers=$(glance member-list --image-id $newimageid | grep $newimageid | cut -d '|' -f 3)
 
-    if [ "$imagevisibility" = "shared" ]
-    then
-        newimagemembers=$(glance member-list --image-id $newimageid | grep $newimageid | cut -d '|' -f 3)
- 
-        # Add memberships to new image
-        for member in $members;
-        do
-            # Don't create member if it's already there
-            if [[ ${newimagemembers} != *"$member"* ]]
-            then
-                glance member-create $newimageid $member
-            fi
-            glance member-update $newimageid $member accepted
-        done
-    fi
+    # Add memberships to new image
+    for member in $members;
+    do
+        # Don't create member if it's already there
+        if [[ ${newimagemembers} != *"$member"* ]]
+        then
+            glance member-create $newimageid $member
+        fi
+        glance member-update $newimageid $member accepted
+    done
 fi
 
