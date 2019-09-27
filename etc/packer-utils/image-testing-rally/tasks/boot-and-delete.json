@@ -6,13 +6,19 @@
                     "name": "m1.tiny"
                 },
                 "image": {
-                    "name": "ScientificLinux-7-AQ"
+                    "name":{{image_name}} 
                 },
                 "force_delete": false
             },
             "runner": {
                 "type": "serial",
-                "times": 10
+                "times": 2
+           },
+           "sla": {
+               "max_seconds_per_iteration": 50,
+               "failure_rate": {
+                   "max": 20
+               }
            }
         }
     ]

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import sys
+sys.path.append("/etc/packer-utils/image-testing-rally/")
+from rally_task_execute import RallyTaskExecution
+from rally_task_analysis import RallyTaskAnalysis
 import pika
 from syslog import syslog, LOG_ERR, LOG_INFO
 from configparser import SafeConfigParser
@@ -7,6 +10,7 @@ import subprocess
 import threading
 import time
 import json
+
 
 syslog(LOG_INFO, 'Starting')
 
@@ -243,6 +247,8 @@ def run_packer_subprocess(threadName, image):
             syslog(LOG_ERR, threadName + ": packer exited with non zero exit code, " + image_name + "." + template_name+ " build failed")
         else:
             syslog(LOG_INFO, threadName + ": image built successfully: " + image_name + "." + template_name)
+            RallyTaskExecution().execute_rally_task(build_file_path)
+            RallyTaskAnalysis().test_analysis()
 
 threads = []
 
