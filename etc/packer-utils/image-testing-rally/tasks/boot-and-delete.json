@@ -1,0 +1,25 @@
+{
+    "NovaServers.boot_and_delete_server": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "image": {
+                    "name":{{image_name}} 
+                },
+                "force_delete": false
+            },
+            "runner": {
+                "type": "serial",
+                "times": 2
+           },
+           "sla": {
+               "max_seconds_per_iteration": 50,
+               "failure_rate": {
+                   "max": 20
+               }
+           }
+        }
+    ]
+}

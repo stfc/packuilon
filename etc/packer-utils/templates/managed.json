@@ -17,12 +17,12 @@
   [
     {
       "type": "file",
-      "source": "/etc/packer-utils/templates/update_ccm_managed.sh",
-      "destination": "/root/update_ccm_managed.sh"
+      "source": "/etc/packer-utils/templates/update_ccm_conf.sh",
+      "destination": "/root/update_ccm_conf.sh"
     },
     {
       "type": "shell",
-      "inline": ["bash /root/update_ccm_managed.sh" ]
+      "inline": ["bash /root/update_ccm_conf.sh" ]
     }
   ],
   "post-processors":

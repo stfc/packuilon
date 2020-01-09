@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import sys
+sys.path.append("/etc/packer-utils/image-testing-rally/")
+from rally_task_execute import RallyTaskExecution
+from rally_task_analysis import RallyTaskAnalysis
 import pika
 from syslog import syslog, LOG_ERR, LOG_INFO
 from configparser import SafeConfigParser
@@ -7,6 +10,7 @@ import subprocess
 import threading
 import time
 import json
+
 
 syslog(LOG_INFO, 'Starting')
 
@@ -81,6 +85,7 @@ class imageBuilder:
         self.imageID = IMAGES["%s%s-%s" % (self.os, self.os_ver, self.architecture)]
         if not (self.imageID):
             raise KeyError('source image not found in dict for key %s%s-%s' % self.os, self.os_ver, self.architecture)
+        syslog(LOG_INFO, 'Personality: {}, Archetype: {}, OS: {}, OS Version: {}'.format(self.personality, self.archetype, self.os, self.os_ver))
     def name(self):
         return "%s-%s%s-%s" % (self.personality, self.os, self.os_ver, self.architecture)
     def prettyName(self):
@@ -88,10 +93,11 @@ class imageBuilder:
     def imageID(self):
         return self.imageID
     def metadata(self):
-        self.metadata = '"AQ_PERSONALITY": "%s",\n' % self.personality
-        self.metadata += '"AQ_OS": "%s",\n' % self.os
-        self.metadata += '"AQ_OSVERSION": "%s-%s",\n' % (self.os_ver, self.architecture)
-        self.metadata += '"AQ_DOMAIN": "prod"\n'
+        self.metadata = '"AQ_PERSONALITY": "%s", ' % self.personality
+        self.metadata += '"AQ_OS": "%s", ' % self.os
+        self.metadata += '"AQ_OSVERSION": "%s-%s", ' % (self.os_ver, self.architecture)
+        self.metadata += '"AQ_DOMAIN": "prod", '
+        self.metadata += '"AQ_ARCHETYPE": "%s"' % (self.archetype)
         return self.metadata
 
 class workerThread (threading.Thread):
@@ -203,14 +209,6 @@ def run_packer_subprocess(threadName, image):
         template = template.replace("$NAME", image_display_name)
         template = template.replace("$IMAGE", source_image_ID)
 
-        #"AQ_ARCHETYPE": "$ARCHETYPE",
-        #                "AQ_DOMAIN": "$DOMAIN",
-        #                "AQ_OS": "$OS",
-        #                "AQ_OSVERSION": "$OSVERSION",
-        #                "AQ_PERSONALITY": "$PERSONALITY",
-        #                "AQ_SANDBOX": "$SANDBOX"
-
-
         build_file_path=BUILD_FILE_DIR + '/' + image_name + "." + template_name + ".json"
         build_start_time = int(time.time())
         log_file_path=LOG_DIR + '/' + image_name + "." + template_name + "." + repr(build_start_time) + ".log"
@@ -249,6 +247,8 @@ def run_packer_subprocess(threadName, image):
             syslog(LOG_ERR, threadName + ": packer exited with non zero exit code, " + image_name + "." + template_name+ " build failed")
         else:
             syslog(LOG_INFO, threadName + ": image built successfully: " + image_name + "." + template_name)
+            RallyTaskExecution().execute_rally_task(build_file_path)
+            RallyTaskAnalysis().test_analysis()
 
 threads = []
 
