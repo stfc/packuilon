@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
 import sys
-sys.path.append("/etc/packer-utils/image-testing-rally/")
-from rally_task_execute import RallyTaskExecution
-from rally_task_analysis import RallyTaskAnalysis
 import pika
 from syslog import syslog, LOG_ERR, LOG_INFO
 from configparser import SafeConfigParser
@@ -10,7 +7,6 @@ import subprocess
 import threading
 import time
 import json
-
 
 syslog(LOG_INFO, 'Starting')
 
@@ -68,36 +64,32 @@ exitFlag = 0
 class imageBuilder:
     def __init__(self, profile_object):
         self.personality = profile_object["system"]["personality"]["name"]
-        if not (self.personality):
-            raise KeyError('personality value not found in profile, cannot continue build')
-        self.archetype = profile_object["system"]["archetype"]["name"]
-        if not (self.archetype):
-            raise KeyError('archetype value not found in profile, cannot continue build')
-        self.architecture = profile_object["system"]["os"]["architecture"]
-        if not (self.architecture):
-            raise KeyError(' architecture value not found in profile, cannot continue build')
+        self.os_string = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
         self.os = profile_object["system"]["os"]["distribution"]["name"]
-        if not (self.os):
-            raise KeyError('OS value not found in profile, cannot continue build')
-        self.os_ver = profile_object["system"]["os"]["version"]["name"]
-        if not (self.personality):
-            raise KeyError('os_ver value not found in profile, cannot continue build')
-        self.imageID = IMAGES["%s%s-%s" % (self.os, self.os_ver, self.architecture)]
-        if not (self.imageID):
-            raise KeyError('source image not found in dict for key %s%s-%s' % self.os, self.os_ver, self.architecture)
-        syslog(LOG_INFO, 'Personality: {}, Archetype: {}, OS: {}, OS Version: {}'.format(self.personality, self.archetype, self.os, self.os_ver))
+        self.os_ver = profile_object["system"]["os"]["version"]["name"] + "-" + profile_object["system"]["os"]["architecture"]
+        syslog(LOG_INFO, str(IMAGES))
+        syslog(LOG_INFO, "OS_STRING = " +self.os_string)
+#       for os in IMAGES:
+        syslog(LOG_INFO, "OS is :" + self.os)
+#           if self.os_string.startswith(os):
+#               for ver in IMAGES[os]:
+        syslog(LOG_INFO, "OS VER is :" + self.os_ver)
+#                   if self.os_string == os + ver:
+#                       self.os = os
+#                       self.os_ver = ver
+        self.imageID = IMAGES[self.os][self.os_ver]
+        if not (self.os and self.os_ver):
+            raise KeyError('os and os_ver not found in the source image dict')
     def name(self):
-        return "%s-%s%s-%s" % (self.personality, self.os, self.os_ver, self.architecture)
+        return "%s-%s" % (self.personality, self.os_string)
     def prettyName(self):
-        return "%s%s-%s %s" % (self.os, self.os_ver, self.architecture, self.personality)
+        return "%s %s" % (self.os_string, self.personality)
     def imageID(self):
         return self.imageID
     def metadata(self):
-        self.metadata = '"AQ_PERSONALITY": "%s", ' % self.personality
-        self.metadata += '"AQ_OS": "%s", ' % self.os
-        self.metadata += '"AQ_OSVERSION": "%s-%s", ' % (self.os_ver, self.architecture)
-        self.metadata += '"AQ_DOMAIN": "prod", '
-        self.metadata += '"AQ_ARCHETYPE": "%s"' % (self.archetype)
+        self.metadata = '"AQ_PERSONALITY": "%s",\n' % self.personality
+        self.metadata += '"AQ_OS": "%s",\n' % self.os
+        self.metadata += '"AQ_OSVERSION": "%s"\n' % self.os_ver
         return self.metadata
 
 class workerThread (threading.Thread):
@@ -161,7 +153,7 @@ def worker_loop(threadName, channel):
                 image = imageBuilder(profile_object)
             except KeyError as e:
                 syslog(LOG_ERR, repr(e))
-                syslog(LOG_ERR, threadName + ": source image was not found, check IMAGES_CONFIG. Continuing")
+                syslog(LOG_ERR, threadName + ": source imge was not found, check IMAGES_CONFIG. Continuing")
                 continue
             syslog(LOG_ERR, "%s processing %s" % (threadName, image.name()))
             run_packer_subprocess(threadName, image)
@@ -209,9 +201,16 @@ def run_packer_subprocess(threadName, image):
         template = template.replace("$NAME", image_display_name)
         template = template.replace("$IMAGE", source_image_ID)
 
+        #"AQ_ARCHETYPE": "$ARCHETYPE",
+        #                "AQ_DOMAIN": "$DOMAIN",
+        #                "AQ_OS": "$OS",
+        #                "AQ_OSVERSION": "$OSVERSION",
+        #                "AQ_PERSONALITY": "$PERSONALITY",
+        #                "AQ_SANDBOX": "$SANDBOX"
+
+
         build_file_path=BUILD_FILE_DIR + '/' + image_name + "." + template_name + ".json"
-        build_start_time = int(time.time())
-        log_file_path=LOG_DIR + '/' + image_name + "." + template_name + "." + repr(build_start_time) + ".log"
+        log_file_path=LOG_DIR + '/' + image_name + "." + template_name + ".log"
 
         try:
             with open( build_file_path, "wt") as buildFile:
@@ -231,7 +230,7 @@ def run_packer_subprocess(threadName, image):
         packerCmd = ( "source {packer_auth};"
                       "export OS_TENANT_ID=$OS_PROJECT_ID;"
                       "export OS_DOMAIN_NAME=$OS_USER_DOMAIN_NAME;"
-                      "packer.io build {build_file};"
+                      "packer.io build {build_file}"
                     ).format(
                         packer_auth=PACKER_AUTH_FILE,
                         build_file=build_file_path
@@ -241,14 +240,10 @@ def run_packer_subprocess(threadName, image):
 
         packerProc = subprocess.Popen(packerCmd, shell=True, stdout=buildLog, stderr=subprocess.STDOUT)
         ret_code = packerProc.wait()
-        build_finish_time = int(time.time())
-        buildLog.write("rabbit2packer: Build finished at %s (epoch) with exit code %s\n" % (build_finish_time, ret_code))
         if (ret_code != 0):
             syslog(LOG_ERR, threadName + ": packer exited with non zero exit code, " + image_name + "." + template_name+ " build failed")
         else:
             syslog(LOG_INFO, threadName + ": image built successfully: " + image_name + "." + template_name)
-            RallyTaskExecution().execute_rally_task(build_file_path)
-            RallyTaskAnalysis().test_analysis()
 
 threads = []
 
