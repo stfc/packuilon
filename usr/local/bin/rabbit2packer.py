@@ -1,15 +1,34 @@
 #!/usr/bin/python
 import sys
+import os
 import pika
 from syslog import syslog, LOG_ERR, LOG_INFO
 from configparser import SafeConfigParser
-import subprocess
+from subprocess import Popen, PIPE
+import subprocess  
 import threading
 import time
 import json
+import smtplib
+import ssl
+
+sslcontext = ssl.create_default_context()
 
 syslog(LOG_INFO, 'Starting')
 
+env=os.environ.copy()
+
+def cl(c):
+    p = Popen(sourcecmd+c, shell=True, stdout=PIPE, env=env)
+    print(c)
+    return p.communicate()[0]
+
+
+def SendMail(Subject , Body, Recipient):
+    body_str_encoded_to_byte = Body.encode()
+    print("mail -s \"" + Subject + "\" "+ Recipient + " < " + body_str_encoded_to_byte)
+    return_stat = cl("mail -s \"" + Subject + "\" " + Recipient + " < "+body_str_encoded_to_byte)
+    print(return_stat)
 
 # Config
 configparser = SafeConfigParser()
@@ -18,23 +37,39 @@ try:
     THREAD_COUNT = configparser.getint('rabbit2packer','THREAD_COUNT')
     if (THREAD_COUNT < 1):
         raise UserWarning('A thread count < 1 is defined, no worker threads will run')
-    PACKER_TEMPLATE_MAP = configparser.get('rabbit2packer','PACKER_TEMPLATE_MAP')
-    LOG_DIR = configparser.get('rabbit2packer','LOG_DIR')
-    BUILD_FILE_DIR = configparser.get('rabbit2packer','BUILD_FILE_DIR')
-    PACKER_AUTH_FILE = configparser.get('rabbit2packer','PACKER_AUTH_FILE')
-    QUEUE = configparser.get('global','QUEUE')
-    IMAGES_CONFIG = configparser.get('rabbit2packer','IMAGES_CONFIG')
-    RABBIT_HOST = configparser.get('global','RABBIT_HOST')
-    RABBIT_PORT = configparser.getint('global','RABBIT_PORT')
-    RABBIT_USER = configparser.get('global','RABBIT_USER')
-    RABBIT_PW = configparser.get('global','RABBIT_PW')
+    PACKER_TEMPLATE_MAP = configparser.get('rabbit2packer', 'PACKER_TEMPLATE_MAP')
+    PACKER_PATH = configparser.get('rabbit2packer', 'PACKER_PATH')
+    LOG_DIR = configparser.get('rabbit2packer', 'LOG_DIR')
+    BUILD_FILE_DIR = configparser.get('rabbit2packer', 'BUILD_FILE_DIR')
+    PACKER_AUTH_FILE = configparser.get('rabbit2packer', 'PACKER_AUTH_FILE')
+    QUEUE = configparser.get('global', 'QUEUE')
+    IMAGES_CONFIG = configparser.get('rabbit2packer', 'IMAGES_CONFIG')
+    RABBIT_HOST = configparser.get('global', 'RABBIT_HOST')
+    RABBIT_PORT = configparser.getint('global', 'RABBIT_PORT')
+    RABBIT_USER = configparser.get('global', 'RABBIT_USER')
+    RABBIT_PW = configparser.get('global', 'RABBIT_PW')
+    success_address = configparser.get('global', 'SUCCESS_ADDRESS')
+    failure_address = configparser.get('global', 'FAILURE_ADDRESS')
 except Exception as e:
     syslog(LOG_ERR, 'Error reading config file')
     syslog(LOG_ERR, repr(e))
     sys.exit(1)
 
+#try:
+#    print(SMTP_SERVER)
+#    print(int(SMTP_PORT))
+#    smtp = smtplib.SMTP(host=SMTP_SERVER, port=int(SMTP_PORT))
+#    print("SMTP object created")
+#    smtp.starttls(context=sslcontext)
+#    print("SMTP TLS Started")
+#    smtp.login(SMTP_USER, SMTP_PASSWORD)
+#    print("SMTP Login Succeeded")
+#    
+#except:
+#    syslog(LOG_ERR, "Failed to connect to SMTP server")
+
 try:
-    with open(IMAGES_CONFIG) as images_JSON:
+    with open(IMAGES_CONFIG) as images_JSON:    
         IMAGES = json.load(images_JSON)
 except IOError as e:
     syslog(LOG_ERR, repr(e))
@@ -46,7 +81,7 @@ except ValueError as e:
     sys.exit(1)
 
 try:
-    with open(PACKER_TEMPLATE_MAP) as template_map_JSON:
+    with open(PACKER_TEMPLATE_MAP) as template_map_JSON:    
         TEMPLATE_MAP = json.load(template_map_JSON)
 except IOError as e:
     syslog(LOG_ERR, repr(e))
@@ -64,9 +99,12 @@ exitFlag = 0
 class imageBuilder:
     def __init__(self, profile_object):
         self.personality = profile_object["system"]["personality"]["name"]
-        self.os_string = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
+        #self.os_string = profile_object["system"]["aii"]["nbp"]["pxelinux"]["kernel"].split('/')[0]
         self.os = profile_object["system"]["os"]["distribution"]["name"]
         self.os_ver = profile_object["system"]["os"]["version"]["name"] + "-" + profile_object["system"]["os"]["architecture"]
+        self.os_string = self.os + self.os_ver
+        self.prettyname = profile_object["system"]["network"]["hostname"]
+        syslog(LOG_INFO, "Name is :" + self.prettyname)
         syslog(LOG_INFO, str(IMAGES))
         syslog(LOG_INFO, "OS_STRING = " +self.os_string)
 #       for os in IMAGES:
@@ -81,9 +119,11 @@ class imageBuilder:
         if not (self.os and self.os_ver):
             raise KeyError('os and os_ver not found in the source image dict')
     def name(self):
-        return "%s-%s" % (self.personality, self.os_string)
+#        return "%s-%s" % (self.personality, self.os_string)
+        return "%s" % (self.prettyname)
     def prettyName(self):
-        return "%s %s" % (self.os_string, self.personality)
+#        return "%s %s" % (self.os_string, self.personality)
+        return "%s" % (self.prettyname)
     def imageID(self):
         return self.imageID
     def metadata(self):
@@ -110,7 +150,7 @@ class workerThread (threading.Thread):
 
         channel = connection.channel()
         channel.queue_declare(
-            queue=QUEUE,
+            queue=QUEUE, 
             durable=True
         )
 
@@ -157,7 +197,7 @@ def worker_loop(threadName, channel):
                 continue
             syslog(LOG_ERR, "%s processing %s" % (threadName, image.name()))
             run_packer_subprocess(threadName, image)
-
+            
         time.sleep(2)
 
 
@@ -166,7 +206,7 @@ def run_packer_subprocess(threadName, image):
     image_name=image.name()
     image_display_name=image.prettyName()
     image_metadata=image.metadata()
-
+        
     try:
         source_image_ID = image.imageID
     except KeyError as e:
@@ -176,11 +216,11 @@ def run_packer_subprocess(threadName, image):
 
     templates = TEMPLATE_MAP.get(image_name)
 
-    if templates is None:
+    if templates is None:        
         templates = TEMPLATE_MAP.get("DEFAULT")
         syslog(LOG_INFO, "No Packer template defined for " + image_name + ". Using the default values")
 
-    if templates is None:
+    if templates is None:        
         syslog(LOG_INFO, "No Packer template defined for Default values. No builds will occur.")
 
     for template in templates:
@@ -208,16 +248,19 @@ def run_packer_subprocess(threadName, image):
         #                "AQ_PERSONALITY": "$PERSONALITY",
         #                "AQ_SANDBOX": "$SANDBOX"
 
+        DATE = datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
 
         build_file_path=BUILD_FILE_DIR + '/' + image_name + "." + template_name + ".json"
         log_file_path=LOG_DIR + '/' + image_name + "." + template_name + ".log"
+        mailfilepath="/tmp/"+imagename+"-"+DATE+".mail"
+
 
         try:
             with open( build_file_path, "wt") as buildFile:
                 buildFile.write(template)
         except IOError as e:
             syslog(LOG_ERR, "Unable to write build file: %s" %  build_file_path )
-            syslog(LOG_ERR, repr(e))
+            syslog(LOG_ERR, repr(e))        
             sys.exit(1)
 
         try:
@@ -226,22 +269,27 @@ def run_packer_subprocess(threadName, image):
             syslog(LOG_ERR, "Unable to write to build log file: %s" %  log_file_path )
             syslog(LOG_ERR, repr(e))
             sys.exit(1)
-
+        
         packerCmd = ( "source {packer_auth};"
                       "export OS_TENANT_ID=$OS_PROJECT_ID;"
-                      "export OS_DOMAIN_NAME=$OS_USER_DOMAIN_NAME;"
-                      "packer.io build {build_file}"
+                      "export OS_DOMAIN_NAME=$OS_USER_DOMAIN_NAME;"  
+                      "{packer_path} build {build_file}"
                     ).format(
-                        packer_auth=PACKER_AUTH_FILE,
-                        build_file=build_file_path
+                        packer_auth=PACKER_AUTH_FILE, 
+                        build_file=build_file_path,
+                        packer_path=PACKER_PATH
                     )
+        syslog(LOG_INFO,"Packer Command: " + packerCmd)
 
         syslog(LOG_INFO, "packer build starting, see: " + log_file_path + " for details")
 
-        packerProc = subprocess.Popen(packerCmd, shell=True, stdout=buildLog, stderr=subprocess.STDOUT)
+        packerProc = subprocess.Popen(packerCmd, shell=True, stdout=buildLog, stderr=subprocess.STDOUT, env=env)
         ret_code = packerProc.wait()
         if (ret_code != 0):
             syslog(LOG_ERR, threadName + ": packer exited with non zero exit code, " + image_name + "." + template_name+ " build failed")
+            with open(mailfilepath, "w") as mailfile:
+                mailfile.write("Build of " + image_name + " failed on " + DATE + " due to rally test failing")
+            SendMail("Build Failed - " + image_name, mailfilepath, failure_address)
         else:
             syslog(LOG_INFO, threadName + ": image built successfully: " + image_name + "." + template_name)
 
@@ -255,3 +303,10 @@ for i in range(THREAD_COUNT):
 
 while True:
     time.sleep(5)
+
+
+
+
+
+
+

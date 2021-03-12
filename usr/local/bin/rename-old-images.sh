@@ -1,61 +1,160 @@
-#!/bin/bash
-set -eu
+#!/usr/bin/python
+import json
+import sys
+import os
+import requests
+from datetime import datetime
+from subprocess import Popen, PIPE
+from ConfigParser import SafeConfigParser
+import time
 
-imagename=$*
-DATE=`date +%Y-%m-%d`
+env = os.environ.copy()
 
-# List all the images that have the same name as the one just added
-echo $imagename
-imagesid=$(openstack image list --sort created_at:desc -f value | grep " $imagename " | awk '{print $1}')
-echo $imagesid
+imagename = sys.argv[1]
 
-if [ -z "$imagesid" ]
-then
-    echo "Image name doesn't exist in the project, no work to do for rename-old-images.sh to do"
-else
-    echo "Image name already exists, renaming:"
-    newimageid=$(echo "$imagesid" | head -n 1)
-    echo $newimageid
+oldimagename = imagename.replace("Next-","")
 
-    # For each image that is not the newest image with this name
-    members=''
-    for id in $(echo "$imagesid" | tail -n +2)
-    do
-        echo $id
-        # Rename image to be at bottom of the list
-        openstack image set $id --name "warehoused-$imagename $DATE"
+#time.sleep(300)
 
-        # Ensure visibility of image is 'shared' before attempting to manipulate members
-        imagevisibility=$(openstack image show "$id" -f json | jq -r .visibility)
-        echo $id
+# Read from config file
+parser = SafeConfigParser()
+try:
+    parser.read('/etc/packer-utils/config.ini')
+    auth_file = parser.get('rabbit2packer','PACKER_ADMIN_AUTH_FILE')
+    success_address = parser.get('global','SUCCESS_ADDRESS')
+    failure_address = parser.get('global','FAILURE_ADDRESS')
+    slackhook = parser.get('global', 'SLACK_SUCCESS_HOOK')
+except:
+    print 'Unable to read from config file'
+    sys.exit(1)
 
-        if [ "$imagevisibility" == "shared" ]
-        then
-            # Get list of members from old image
-            for member in $(glance member-list --image-id $id | grep $id | cut -d '|' -f 3);
-            do
-                # Only add if not already in list
-                if [[ ${members} != *"$member"* ]]
-                then
-                    members="$members $member"
-                fi
-                # Remove members from old image
-                glance member-delete $id $member
-            done
-        fi
-    done
+sourcecmd = "source " + auth_file + ";"
+
+def cl(c):
+    p = Popen(sourcecmd+c, shell=True, stdout=PIPE, env=env)
+    print(c)
+    return p.communicate()[0]
+
+def SendMail(Subject , Body, Recipient):
+    body_str_encoded_to_byte = Body.encode()
+    print("mail -s \"" + Subject + "\" "+ Recipient + " < " + body_str_encoded_to_byte)
+    return_stat = cl("mail -s \"" + Subject + "\" " + Recipient + " < "+body_str_encoded_to_byte)
+    print(return_stat)
+
+
+DATE = datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
+
+print(DATE)
+
+print(imagename)
+print(oldimagename)
+
+with open('/etc/packer-utils/templates/rally-test.json') as templatejson:
+    testtemplate= json.load(templatejson)
+
+testtemplate["VMTasks.boot_runcommand_delete"][0]["args"]["image"]["name"] = imagename
+
+with open( "/etc/packer-utils/tests/" + imagename + ".json", "w") as testFile:
+    json.dump(testtemplate, testFile)
+
+mailfilepath="/tmp/"+imagename+"-"+DATE+".mail"
     
-    newimagemembers=$(glance member-list --image-id $newimageid | grep $newimageid | cut -d '|' -f 3)
 
-    # Add memberships to new image
-    for member in $members;
-    do
-        # Don't create member if it's already there
-        if [[ ${newimagemembers} != *"$member"* ]]
-        then
-            glance member-create $newimageid $member
-        fi
-        glance member-update $newimageid $member accepted
-    done
-fi
+test = cl("rally deployment use openstack-prod ; rally task start /etc/packer-utils/tests/" + imagename + ".json | grep \"rally task report\" | grep \"json\" | sed 's/output.json/\/tmp\/" + imagename + "-" + DATE + "\.json/g'")
+#test = cl("rally task start /etc/packer-utils/tests/" + imagename + ".json ")
 
+print(test)
+#print(test + " /tmp/"+imagename+"-"+DATE+".json")
+#cl(test + " /tmp/"+imagename+"-"+DATE+".json")
+cl(test)
+
+with open("/tmp/"+imagename+"-"+DATE+".json") as testresultjson:
+    testresult = json.load(testresultjson)
+
+print(testresult["tasks"][0]["pass_sla"])
+
+testPassed=testresult["tasks"][0]["pass_sla"]
+
+if testPassed:
+    imagedetails = json.loads(cl("openstack image show -f json " + imagename))
+
+    allimages = json.loads(cl("openstack image list --long -f json"))
+
+    private = True
+    public = False
+    shared = False
+
+    members = []
+    images = []
+    for image in allimages:
+        if oldimagename.lower() in image["Name"].lower():
+            if oldimagename.lower() == image["Name"].lower():
+                oldimagedetails = json.loads(cl("openstack image show -f json " + image["Name"]))
+            images.append(image)
+            if image["Visibility"] == "public":
+                public = True
+            if image["Visibility"] == "shared":
+                print(image)
+                print(image["ID"])
+                members.extend(json.loads(cl("openstack image member list -f json " + image["ID"])))
+                shared = True
+        
+    visibility = " --private "
+    if public:
+        visibility = " --public "
+    elif shared:
+        visibility = " --shared "
+
+    print(visibility)
+    metadatastring = ""
+    try:
+        for metadata in oldimagedetails["properties"]:
+            if "AQ" in metadata or "os_distro" in metadata or "os_version" in metadata or "os_variant" in metadata:
+                metadatastring = metadatastring + " --property " + metadata + "=" + oldimagedetails["properties"][metadata]
+    except:
+        print("Previous version not found")
+    
+
+    for member in members:
+        print("glance member-create " + imagedetails["id"] + " " + member["Member ID"])
+        cl("glance member-create " + imagedetails["id"] + " " + member["Member ID"])
+        print("glance member-update " + imagedetails["id"] + " " + member["Member ID"] + " accepted")
+        cl("glance member-update " + imagedetails["id"] + " " + member["Member ID"] + " accepted")
+
+    cl("openstack image set " + oldimagename + " --deactivate --name 'warehoused-" + oldimagename + "-" + DATE + "'")
+    print("openstack image set " + oldimagename + " --deactivate --name 'warehoused-" + oldimagename + "-" + DATE + "'")
+
+    cl("openstack image set " + visibility + imagename + " --name '" + oldimagename + "' " + metadatastring)
+    print("openstack image set " + visibility + imagename + " --name '" + oldimagename + "' " + metadatastring)
+
+    
+
+#print(images)
+
+#print(members)
+    
+    for image in allimages:
+        if oldimagename.lower() in image["Name"].lower():
+            print("sed -i 's/" + image["ID"] + "/" + imagedetails["id"] + "/g' /etc/packer-utils/build/*.json")
+            cl("sed -i 's/" + image["ID"] + "/" + imagedetails["id"] + "/g' /etc/packer-utils/build/*.json")
+            print("sed -i 's/" + image["ID"] + "/" + imagedetails["id"] + "/g' /etc/packer-utils/source-images.json")
+            cl("sed -i 's/" + image["ID"] + "/" + imagedetails["id"] + "/g' /etc/packer-utils/source-images.json")
+
+    with open(mailfilepath, "w") as mailfile:
+        mailfile.write("Build of " + imagename + " succeeded on " + DATE "+. New image ID is `" + imagedetails["id"] + "`")  
+    SendMail(oldimagename+ " - Build Succeeded", mailfilepath, success_address)
+    
+    slackheaders = {'Content-Type': 'application/json'}
+    slackdata = {'text': "Build of " + imagename + " succeeded on " + DATE "+. New image ID is `" + imagedetails["id"] + "`"}
+    slackdebug=requests.post(slackhook, headers=slackheaders, data=json.dumps(slackdata))
+    print(slackdebug)
+    
+
+else:
+    with open(mailfilepath, "w") as mailfile:
+        mailfile.write("Build of " + imagename + " failed on " + DATE + " due to rally test failing")
+    SendMail("Build Failed", mailfilepath, failure_address)
+    visibility = " --private "
+    print("openstack image set " + visibility + imagename + " --name 'Broken-" + oldimagename + DATE + "'")
+    cl("openstack image set " + visibility + imagename + " --name 'Broken-" + oldimagename + DATE + "'")
+    
