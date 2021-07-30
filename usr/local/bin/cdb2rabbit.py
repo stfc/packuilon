@@ -36,7 +36,7 @@ def updateCachedFile(file_name, contents):
         syslog(LOG_ERR, repr(e))
 
 def pushMessageToQueue(message):
-    try: 
+    try:
         channel.basic_publish(exchange='',
                               routing_key=QUEUE,
                               body=message,
@@ -60,7 +60,7 @@ def downloadProfile(profile):
             syslog(LOG_ERR,'We failed to reach a server.')
             syslog(LOG_ERR,'Reason: ', e.reason)
         sys.exit(1)
-  
+
     return profile_contents
 
 
@@ -71,12 +71,12 @@ def hasProfileUpdated(profile_name, new_profile_contents):
     except FileNotFoundError:
         syslog(LOG_INFO, "cached profile " + profile + " does not exist, creating one and continuing")
         updateCachedFile(CACHE_DIR + "/" + profile_name, new_profile_contents)
-        return False
+        return True
     except IOError as e:
         syslog(LOG_ERR, "Unable to open cached profile: " + profile_name)
         syslog(LOG_ERR, repr(e))
         sys.exit(1)
-    
+
     for line in new_profile_contents.splitlines():
         if line not in cached_profile:
             updateCachedFile(CACHE_DIR + "/" + profile_name, new_profile_contents)
