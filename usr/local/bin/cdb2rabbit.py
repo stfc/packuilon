@@ -71,7 +71,7 @@ def hasProfileUpdated(profile_name, new_profile_contents):
     except FileNotFoundError:
         syslog(LOG_INFO, "cached profile " + profile + " does not exist, creating one and continuing")
         updateCachedFile(CACHE_DIR + "/" + profile_name, new_profile_contents)
-        return False
+        return True
     except IOError as e:
         syslog(LOG_ERR, "Unable to open cached profile: " + profile_name)
         syslog(LOG_ERR, repr(e))
