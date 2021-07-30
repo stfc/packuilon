@@ -5,6 +5,7 @@ import pika
 from syslog import syslog, LOG_ERR, LOG_INFO
 from configparser import SafeConfigParser
 from subprocess import Popen, PIPE
+from datetime import datetime
 import subprocess  
 import threading
 import time
@@ -19,7 +20,7 @@ syslog(LOG_INFO, 'Starting')
 env=os.environ.copy()
 
 def cl(c):
-    p = Popen(sourcecmd+c, shell=True, stdout=PIPE, env=env)
+    p = Popen(c, shell=True, stdout=PIPE, env=env)
     print(c)
     return p.communicate()[0]
 
@@ -67,32 +68,32 @@ except Exception as e:
 #    
 #except:
 #    syslog(LOG_ERR, "Failed to connect to SMTP server")
+def load_templates_images():
+    try:
+        with open(IMAGES_CONFIG) as images_JSON:    
+            IMAGES = json.load(images_JSON)
+    except IOError as e:
+        syslog(LOG_ERR, repr(e))
+        syslog(LOG_ERR, "Could not open images config file.")
+        sys.exit(1)
+    except ValueError as e:
+        syslog(LOG_ERR, repr(e))
+        syslog(LOG_ERR, "Could not decode images config file, malformed json?")
+        sys.exit(1)
 
-try:
-    with open(IMAGES_CONFIG) as images_JSON:    
-        IMAGES = json.load(images_JSON)
-except IOError as e:
-    syslog(LOG_ERR, repr(e))
-    syslog(LOG_ERR, "Could not open images config file.")
-    sys.exit(1)
-except ValueError as e:
-    syslog(LOG_ERR, repr(e))
-    syslog(LOG_ERR, "Could not decode images config file, malformed json?")
-    sys.exit(1)
+    try:
+        with open(PACKER_TEMPLATE_MAP) as template_map_JSON:    
+            TEMPLATE_MAP = json.load(template_map_JSON)
+    except IOError as e:
+        syslog(LOG_ERR, repr(e))
+        syslog(LOG_ERR, "Could not open template map file.")
+        sys.exit(1)
+    except ValueError as e:
+        syslog(LOG_ERR, repr(e))
+        syslog(LOG_ERR, "Could not decode template map file, malformed json?")
+        sys.exit(1)
 
-try:
-    with open(PACKER_TEMPLATE_MAP) as template_map_JSON:    
-        TEMPLATE_MAP = json.load(template_map_JSON)
-except IOError as e:
-    syslog(LOG_ERR, repr(e))
-    syslog(LOG_ERR, "Could not open template map file.")
-    sys.exit(1)
-except ValueError as e:
-    syslog(LOG_ERR, repr(e))
-    syslog(LOG_ERR, "Could not decode template map file, malformed json?")
-    sys.exit(1)
-
-
+load_templates_images()
 
 exitFlag = 0
 
@@ -115,6 +116,7 @@ class imageBuilder:
 #                   if self.os_string == os + ver:
 #                       self.os = os
 #                       self.os_ver = ver
+        load_templates_images()
         self.imageID = IMAGES[self.os][self.os_ver]
         if not (self.os and self.os_ver):
             raise KeyError('os and os_ver not found in the source image dict')
@@ -252,7 +254,7 @@ def run_packer_subprocess(threadName, image):
 
         build_file_path=BUILD_FILE_DIR + '/' + image_name + "." + template_name + ".json"
         log_file_path=LOG_DIR + '/' + image_name + "." + template_name + ".log"
-        mailfilepath="/tmp/"+imagename+"-"+DATE+".mail"
+        mailfilepath="/tmp/"+image_name+"-"+DATE+".mail"
 
 
         try:
